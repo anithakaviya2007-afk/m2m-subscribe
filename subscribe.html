@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HiveMQ Real-Time Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        #status { padding: 5px 15px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }
+        .online { background: #d4edda; color: #155724; }
+        .offline { background: #f8d7da; color: #721c24; }
+        
+        /* Grid for incoming data */
+        #dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        .data-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-left: 5px solid #007bff;
+        }
+        .topic-label { font-size: 0.8em; color: #666; text-transform: uppercase; }
+        .value { font-size: 1.8em; font-weight: bold; margin: 10px 0; color: #333; }
+        .time { font-size: 0.7em; color: #999; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>RTC Monitoring Dashboard</h1>
+    <span id="status" class="offline">CONNECTING...</span>
+</div>
+
+<div id="dashboard">
+    </div>
+
+<script>
+    const randomId = "ram_sub_" + Math.random().toString(16).substring(2, 8);
+    const client = new Paho.MQTT.Client("broker.hivemq.com", 8884, randomId);
+
+    const options = {
+        useSSL: true,
+        timeout: 3,
+        onSuccess: () => {
+            document.getElementById("status").innerText = "CONNECTED";
+            document.getElementById("status").className = "online";
+            // Subscribe to the wildcard topic
+            client.subscribe("rtc/cblock/#");
+            console.log("Subscribed to rtc/cblock/#");
+        },
+        onFailure: (err) => {
+            document.getElementById("status").innerText = "CONNECTION FAILED";
+            console.error(err);
+        }
+    };
+
+    // Define what happens when a message arrives
+    client.onMessageArrived = (message) => {
+        const topic = message.destinationName;
+        const payload = message.payloadString;
+        updateDashboard(topic, payload);
+    };
+
+    client.onConnectionLost = (responseObject) => {
+        document.getElementById("status").innerText = "DISCONNECTED";
+        document.getElementById("status").className = "offline";
+    };
+
+    function updateDashboard(topic, payload) {
+        // Create a unique ID for the card based on topic (escaping dots/slashes)
+        const cardId = "card_" + topic.replace(/\//g, '_');
+        let card = document.getElementById(cardId);
+
+        if (!card) {
+            // Create new card if it doesn't exist
+            const dashboard = document.getElementById("dashboard");
+            card = document.createElement("div");
+            card.id = cardId;
+            card.className = "data-card";
+            dashboard.appendChild(card);
+        }
+
+        // Update card content
+        const now = new Date().toLocaleTimeString();
+        card.innerHTML = `
+            <div class="topic-label">${topic}</div>
+            <div class="value">${payload}</div>
+            <div class="time">Last update: ${now}</div>
+        `;
+    }
+
+    client.connect(options);
+</script>
+
+</body>
+</html>
